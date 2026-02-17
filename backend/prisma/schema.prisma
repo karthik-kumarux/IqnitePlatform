@@ -1,0 +1,265 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User Model
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique
+  password      String
+  firstName     String?
+  lastName      String?
+  role          UserRole  @default(PARTICIPANT)
+  isActive      Boolean   @default(true)
+  isVerified    Boolean   @default(false)
+  verificationToken String?
+  resetPasswordToken String?
+  resetPasswordExpires DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  
+  // Relations
+  profile       Profile?
+  sessions      Session[]
+  refreshTokens RefreshToken[]
+  quizzes       Quiz[]
+  quizSessions  QuizSession[]
+  answers       Answer[]
+  
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  ORGANIZER
+  PARTICIPANT
+}
+
+// Profile Model
+model Profile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatar      String?
+  bio         String?
+  phone       String?
+  dateOfBirth DateTime?
+  address     String?
+  city        String?
+  country     String?
+  zipCode     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("profiles")
+}
+
+// Session Model for active sessions
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@map("sessions")
+}
+
+// Refresh Token Model
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@map("refresh_tokens")
+}
+
+// Quiz Model
+model Quiz {
+  id              String        @id @default(uuid())
+  title           String
+  description     String?
+  organizerId     String
+  organizer       User          @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  code            String        @unique
+  isPublic        Boolean       @default(true)
+  duration        Int?          // Duration in minutes
+  passingScore    Int?          // Percentage required to pass
+  maxAttempts     Int           @default(1)
+  showAnswers     Boolean       @default(false) // Show correct answers after completion
+  shuffleQuestions Boolean      @default(false)
+  scheduledAt     DateTime?     // Scheduled start time
+  expiresAt       DateTime?     // Quiz expiration
+  isActive        Boolean       @default(true)
+  status          QuizStatus    @default(DRAFT)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  questions       Question[]
+  sessions        QuizSession[]
+  lobbyParticipants LobbyParticipant[]
+  guestSessions   GuestQuizSession[]
+  
+  @@map("quizzes")
+  @@index([organizerId])
+  @@index([code])
+}
+
+enum QuizStatus {
+  DRAFT
+  WAITING
+  IN_PROGRESS
+  COMPLETED
+}
+
+// Question Model
+model Question {
+  id              String        @id @default(uuid())
+  quizId          String
+  quiz            Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  type            QuestionType
+  question        String
+  options         Json?         // For MCQ: ["Option A", "Option B", "Option C", "Option D"]
+  correctAnswer   String        // For MCQ: "A", for True/False: "true"/"false", for short answer: the answer
+  points          Int           @default(1)
+  timeLimit       Int?          // Time limit for this question in seconds
+  order           Int           @default(0)
+  explanation     String?       // Explanation shown after answering
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  answers         Answer[]
+  guestAnswers    GuestAnswer[]
+  
+  @@map("questions")
+  @@index([quizId])
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+}
+
+// Quiz Session Model (When a participant joins a quiz)
+model QuizSession {
+  id              String        @id @default(uuid())
+  quizId          String
+  quiz            Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  participantId   String
+  participant     User          @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  status          SessionStatus @default(IN_PROGRESS)
+  score           Int           @default(0)
+  totalPoints     Int           @default(0)
+  percentage      Float?
+  startedAt       DateTime      @default(now())
+  completedAt     DateTime?
+  timeSpent       Int?          // Time spent in seconds
+  
+  // Relations
+  answers         Answer[]
+  
+  @@map("quiz_sessions")
+  @@index([quizId])
+  @@index([participantId])
+  @@unique([quizId, participantId]) // One session per user per quiz (unless multiple attempts)
+}
+
+enum SessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
+  TIMED_OUT
+}
+
+// Answer Model (Participant's answer to a question)
+model Answer {
+  id              String        @id @default(uuid())
+  sessionId       String
+  session         QuizSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId      String
+  question        Question      @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  participantId   String
+  participant     User          @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  answer          String        // Participant's answer
+  isCorrect       Boolean       @default(false)
+  pointsEarned    Int           @default(0)
+  timeSpent       Int?          // Time spent on this question in seconds
+  answeredAt      DateTime      @default(now())
+  
+  @@map("answers")
+  @@index([sessionId])
+  @@index([questionId])
+  @@unique([sessionId, questionId]) // One answer per question per session
+}
+
+// Lobby Participant Model (For guests waiting in the lobby)
+model LobbyParticipant {
+  id              String   @id @default(uuid())
+  quizId          String
+  quiz            Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  participantName String
+  joinedAt        DateTime @default(now())
+  
+  @@map("lobby_participants")
+  @@index([quizId])
+}
+
+// Guest Quiz Session Model (For guest participants who don't have accounts)
+model GuestQuizSession {
+  id              String        @id @default(uuid())
+  quizId          String
+  quiz            Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  guestName       String
+  sessionId       String        @unique // The guest's session ID from frontend
+  status          SessionStatus @default(IN_PROGRESS)
+  score           Int           @default(0)
+  totalPoints     Int           @default(0)
+  percentage      Float?
+  startedAt       DateTime      @default(now())
+  completedAt     DateTime?
+  timeSpent       Int?          // Time spent in seconds
+  
+  // Relations
+  answers         GuestAnswer[]
+  
+  @@map("guest_quiz_sessions")
+  @@index([quizId])
+  @@index([sessionId])
+}
+
+// Guest Answer Model (Guest participant's answer to a question)
+model GuestAnswer {
+  id              String            @id @default(uuid())
+  sessionId       String
+  session         GuestQuizSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionId      String
+  question        Question          @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answer          String            // Guest's answer
+  isCorrect       Boolean           @default(false)
+  pointsEarned    Int               @default(0)
+  answeredAt      DateTime          @default(now())
+  
+  @@map("guest_answers")
+  @@index([sessionId])
+  @@index([questionId])
+  @@unique([sessionId, questionId]) // One answer per question per session
+}
+

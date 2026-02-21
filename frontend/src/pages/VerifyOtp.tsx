@@ -6,7 +6,7 @@ import { useAuthStore } from '../store/authStore';
 const VerifyOtp = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login: setAuth } = useAuthStore();
+  const { setAuth } = useAuthStore();
   const email = location.state?.email || '';
 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);

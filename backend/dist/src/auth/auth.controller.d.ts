@@ -7,14 +7,14 @@ export declare class AuthController {
     register(registerDto: RegisterDto): Promise<{
         user: {
             id: string;
+            isActive: boolean;
+            createdAt: Date;
             email: string;
             username: string;
             firstName: string | null;
             lastName: string | null;
             role: import("@prisma/client").$Enums.UserRole;
-            isActive: boolean;
             isVerified: boolean;
-            createdAt: Date;
         };
         accessToken: string;
         refreshToken: string;
@@ -28,14 +28,14 @@ export declare class AuthController {
         message: string;
         user: {
             id: string;
+            isActive: boolean;
+            createdAt: Date;
             email: string;
             username: string;
             firstName: string | null;
             lastName: string | null;
             role: import("@prisma/client").$Enums.UserRole;
-            isActive: boolean;
             isVerified: boolean;
-            createdAt: Date;
         };
     }>;
     resendOtp(body: {

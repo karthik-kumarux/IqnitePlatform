@@ -3,6 +3,25 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { quizAPI, questionAPI, sessionAPI } from '../services/api';
 import type { Quiz, Question } from '../types';
 
+// Helper function to convert video URLs to embed format
+const getEmbedUrl = (url: string): string => {
+  if (!url) return '';
+  
+  // YouTube
+  const youtubeMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&]+)/);
+  if (youtubeMatch) {
+    return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
+  }
+  
+  // Vimeo
+  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeoMatch) {
+    return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+  }
+  
+  return url;
+};
+
 const TakeQuiz = () => {
   const { id } = useParams<{ id: string }>();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -29,7 +48,19 @@ const TakeQuiz = () => {
       ]);
       
       setQuiz(quizRes.data);
-      setQuestions(questionsRes.data.sort((a: Question, b: Question) => a.order - b.order));
+      const sortedQuestions = questionsRes.data.sort((a: Question, b: Question) => a.order - b.order);
+      setQuestions(sortedQuestions);
+      
+      // Debug: Log to check if imageUrl is present
+      console.log('Questions loaded:', sortedQuestions.length);
+      if (sortedQuestions.length > 0) {
+        console.log('First question:', sortedQuestions[0]);
+        if ((sortedQuestions[0] as any).imageUrl) {
+          console.log('Image URL found:', (sortedQuestions[0] as any).imageUrl);
+        } else {
+          console.log('No imageUrl in first question');
+        }
+      }
 
       const sessionRes = await sessionAPI.start(id!);
       setSessionId(sessionRes.data.id);
@@ -108,7 +139,34 @@ const TakeQuiz = () => {
           <span>{currentQuestion.points} points</span>
         </div>
 
-        <h2 style={questionTextStyle}>{currentQuestion.question}</h2>
+        {/* Question text with rich text support */}
+        <div 
+          style={questionTextStyle}
+          dangerouslySetInnerHTML={{ __html: currentQuestion.question }}
+        />
+
+        {/* Image display */}
+        {(currentQuestion as any).imageUrl && (
+          <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+            <img 
+              src={(currentQuestion as any).imageUrl} 
+              alt="Question" 
+              style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: '8px', objectFit: 'contain' }} 
+            />
+          </div>
+        )}
+        
+        {/* Video embed */}
+        {(currentQuestion as any).videoUrl && (
+          <div style={{ marginBottom: '1.5rem', position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden' }}>
+            <iframe
+              src={getEmbedUrl((currentQuestion as any).videoUrl)}
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', borderRadius: '8px' }}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+        )}
 
         <div style={answersStyle}>
           {currentQuestion.type === 'MULTIPLE_CHOICE' && currentQuestion.options ? (

@@ -18,6 +18,11 @@ const Navbar = () => {
           {isAuthenticated ? (
             <>
               <span style={userStyle}>👤 {user?.username} ({user?.role})</span>
+              {user?.role === 'ADMIN' && (
+                <button style={btnStyle} onClick={() => navigate('/admin')}>
+                  Admin Panel
+                </button>
+              )}
               {user?.role === 'ORGANIZER' && (
                 <button style={btnStyle} onClick={() => navigate('/organizer')}>
                   Dashboard
@@ -49,10 +54,15 @@ const Navbar = () => {
 };
 
 const navStyle: React.CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
   background: '#2c3e50',
   color: 'white',
   padding: '1rem 0',
   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  zIndex: 1000,
 };
 
 const containerStyle: React.CSSProperties = {

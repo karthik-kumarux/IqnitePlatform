@@ -20,7 +20,9 @@ const Login = () => {
       const { user, accessToken, refreshToken } = response.data;
       setAuth(user, accessToken, refreshToken);
       
-      if (user.role === 'ORGANIZER') {
+      if (user.role === 'ADMIN') {
+        navigate('/admin');
+      } else if (user.role === 'ORGANIZER') {
         navigate('/organizer');
       } else {
         navigate('/participant');

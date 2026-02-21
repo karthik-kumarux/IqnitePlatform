@@ -1,11 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ToastProvider } from './context/ToastContext';
 import Navbar from './components/Navbar';
 import PrivateRoute from './components/PrivateRoute';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import OrganizerDashboard from './pages/OrganizerDashboard';
+import OrganizerDashboard from './pages/OrganizerDashboardEnhanced';
 import CreateQuiz from './pages/CreateQuiz';
 import QuizDetails from './pages/QuizDetails';
 import OrganizerQuizLiveDashboard from './pages/OrganizerQuizLiveDashboard';
@@ -17,6 +18,8 @@ import TakeQuizGuest from './pages/TakeQuizGuest';
 import GuestQuizResults from './pages/GuestQuizResults';
 import LobbyWaitingRoom from './pages/LobbyWaitingRoom';
 import OrganizerLobbyControl from './pages/OrganizerLobbyControl';
+import OrganizerQuizResults from './pages/OrganizerQuizResults';
+import AdminDashboard from './pages/AdminDashboardNew';
 
 const queryClient = new QueryClient();
 
@@ -24,12 +27,14 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+      <ToastProvider>
+        <BrowserRouter>
+          <Navbar />
+          <div style={{ paddingTop: '80px' }}>
+            <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
           
           {/* Public Quiz Join Routes - No Auth Required */}
           <Route path="/join" element={<JoinQuiz />} />
@@ -86,6 +91,24 @@ function App() {
               </PrivateRoute>
             }
           />
+          <Route
+            path="/organizer/quiz/:id/results"
+            element={
+              <PrivateRoute allowedRoles={['ORGANIZER']}>
+                <OrganizerQuizResults />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Admin Routes */}
+          <Route
+            path="/admin"
+            element={
+              <PrivateRoute allowedRoles={['ADMIN']}>
+                <AdminDashboard />
+              </PrivateRoute>
+            }
+          />
 
           {/* Participant Routes */}
           <Route
@@ -115,7 +138,9 @@ function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+          </div>
       </BrowserRouter>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

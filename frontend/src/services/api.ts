@@ -40,6 +40,8 @@ export const authAPI = {
   login: (data: any) => api.post('/auth/login', data),
   me: () => api.post('/auth/me'),
   logout: (refreshToken: string) => api.post('/auth/logout', { refreshToken }),
+  forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token: string, newPassword: string) => api.post('/auth/reset-password', { token, newPassword }),
 };
 
 // Quiz API
@@ -51,6 +53,24 @@ export const quizAPI = {
   delete: (id: string) => api.delete(`/quiz/${id}`),
   joinByCode: (code: string) => api.post('/quiz/join', { code }),
   getStats: (id: string) => api.get(`/quiz/${id}/stats`),
+  resetQuiz: (id: string) => api.post(`/quiz/${id}/reset`),
+  
+  // Quiz History
+  getActiveQuiz: () => api.get('/quiz/organizer/active'),
+  getRecentQuizzes: (page = 1, limit = 10) => api.get('/quiz/organizer/recent', { params: { page, limit } }),
+  getQuizResults: (id: string) => api.get(`/quiz/${id}/results`),
+  
+  // Bulk Operations
+  bulkOperation: (quizIds: string[], operation: 'DELETE' | 'ARCHIVE' | 'UNARCHIVE' | 'ACTIVATE' | 'DEACTIVATE') =>
+    api.post('/quiz/bulk/operation', { quizIds, operation }),
+  
+  // Archive Operations
+  archive: (id: string) => api.post(`/quiz/${id}/archive`),
+  unarchive: (id: string) => api.post(`/quiz/${id}/unarchive`),
+  
+  // Export/Import
+  export: (quizIds?: string[]) => api.post('/quiz/export', { quizIds }),
+  import: (backupData: any) => api.post('/quiz/import', { backupData }),
 };
 
 // Question API
@@ -71,4 +91,30 @@ export const sessionAPI = {
     api.post(`/session/${sessionId}/answer`, data),
   complete: (sessionId: string) => api.post(`/session/${sessionId}/complete`),
   getMyResults: () => api.get('/session/my/results'),
+};
+
+// Admin API
+export const adminAPI = {
+  getSystemStats: () => api.get('/admin/stats'),
+  getAllUsers: (page = 1, limit = 20, search?: string, role?: string, isActive?: boolean) => {
+    const params: any = { page, limit };
+    if (search && search.trim()) params.search = search.trim();
+    if (role && role.trim()) params.role = role.trim();
+    if (isActive !== undefined) params.isActive = isActive;
+    return api.get('/admin/users', { params });
+  },
+  getUserDetails: (id: string) => api.get(`/admin/users/${id}`),
+  createUser: (userData: any) => api.post('/admin/users', userData),
+  deleteUser: (id: string) => api.delete(`/admin/users/${id}`),
+  updateUserRole: (id: string, role: string) => api.patch(`/admin/users/${id}/role`, { role }),
+  updateUserStatus: (id: string, isActive: boolean) => api.patch(`/admin/users/${id}/status`, { isActive }),
+  bulkUpdateUserRole: (userIds: string[], role: string) => api.post('/admin/users/bulk/role', { userIds, role }),
+  bulkUpdateUserStatus: (userIds: string[], isActive: boolean) => api.post('/admin/users/bulk/status', { userIds, isActive }),
+  getAllQuizzes: (page = 1, limit = 20) => api.get('/admin/quizzes', { params: { page, limit } }),
+  deleteQuiz: (id: string, adminId: string) => api.delete(`/admin/quizzes/${id}`, { data: { adminId } }),
+  transferQuizOwnership: (quizId: string, newOrganizerId: string, adminId: string) => 
+    api.post(`/admin/quizzes/${quizId}/transfer`, { newOrganizerId, adminId }),
+  getRecentActivity: (limit = 50) => api.get('/admin/recent-activity', { params: { limit } }),
+  getAdvancedAnalytics: () => api.get('/admin/analytics'),
+  getAuditLogs: (page = 1, limit = 50) => api.get('/admin/audit-logs', { params: { page, limit } }),
 };

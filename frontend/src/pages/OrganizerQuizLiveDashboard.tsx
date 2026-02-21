@@ -70,7 +70,7 @@ const OrganizerQuizLiveDashboard = () => {
       
       // Transform leaderboard data to participants format
       const leaderboardData = statsRes.data.leaderboard || [];
-      const participantsData = leaderboardData.map((entry: any, index: number) => ({
+      const participantsData = leaderboardData.map((entry: any) => ({
         id: entry.participant.id,
         participantName: entry.participant.username || entry.participant.email,
         score: entry.score,

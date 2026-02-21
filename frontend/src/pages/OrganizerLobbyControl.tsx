@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
+import { websocketService } from '../services/websocket';
 
 const API_URL = 'http://localhost:3000/api';
 
@@ -35,9 +36,58 @@ export default function OrganizerLobbyControl() {
       setLoading(false);
       return;
     }
-    fetchQuizAndParticipants();
-    const interval = setInterval(fetchQuizAndParticipants, 3000);
-    return () => clearInterval(interval);
+    
+    const initializeLobby = async () => {
+      // Initial fetch
+      await fetchQuizAndParticipants();
+
+      // Connect to WebSocket and wait for connection
+      websocketService.connect();
+      
+      // Small delay to ensure connection is established
+      setTimeout(() => {
+        websocketService.joinQuizRoom(quizId);
+      }, 100);
+    };
+
+    initializeLobby();
+
+    // Listen for real-time updates
+    const handleParticipantJoined = (participant: LobbyParticipant) => {
+      console.log('✅ Participant joined:', participant);
+      setParticipants((prev) => {
+        // Check if participant already exists
+        if (prev.some(p => p.id === participant.id)) {
+          return prev;
+        }
+        return [...prev, participant];
+      });
+    };
+
+    const handleParticipantLeft = (data: { participantId: string }) => {
+      console.log('❌ Participant left:', data.participantId);
+      setParticipants((prev) => prev.filter((p) => p.id !== data.participantId));
+    };
+
+    const handleQuizStatusChange = (data: { status: string }) => {
+      console.log('📊 Quiz status changed:', data.status);
+      if (data.status === 'IN_PROGRESS') {
+        navigate(`/organizer/quiz/${quizId}/live`);
+      }
+    };
+
+    websocketService.on('participantJoined', handleParticipantJoined);
+    websocketService.on('participantLeft', handleParticipantLeft);
+    websocketService.on('quizStatusChange', handleQuizStatusChange);
+
+    return () => {
+      websocketService.off('participantJoined', handleParticipantJoined);
+      websocketService.off('participantLeft', handleParticipantLeft);
+      websocketService.off('quizStatusChange', handleQuizStatusChange);
+      if (quizId) {
+        websocketService.leaveQuizRoom(quizId);
+      }
+    };
   }, [quizId]);
 
   const fetchQuizAndParticipants = async () => {
@@ -116,26 +166,21 @@ export default function OrganizerLobbyControl() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading lobby...</p>
-        </div>
+      <div style={loadingContainerStyle}>
+        <div style={spinnerStyle}></div>
+        <p style={loadingTextStyle}>Loading lobby...</p>
       </div>
     );
   }
 
   if (error && !quiz) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
-          <div className="text-red-500 text-5xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Error</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={() => navigate('/organizer/dashboard')}
-            className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition"
-          >
+      <div style={errorContainerStyle}>
+        <div style={errorCardStyle}>
+          <div style={errorIconStyle}>⚠️</div>
+          <h2 style={errorTitleStyle}>Error</h2>
+          <p style={errorMessageStyle}>{error}</p>
+          <button style={errorButtonStyle} onClick={() => navigate('/organizer/dashboard')}>
             Back to Dashboard
           </button>
         </div>
@@ -144,115 +189,469 @@ export default function OrganizerLobbyControl() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6 text-white">
-            <div className="flex justify-between items-start">
-              <div>
-                <h1 className="text-3xl font-bold mb-2">{quiz?.title}</h1>
-                <p className="text-purple-100">Quiz Code: <span className="font-mono font-bold text-yellow-300">{quiz?.code}</span></p>
-                {quiz?.description && (
-                  <p className="text-purple-100 mt-2">{quiz.description}</p>
-                )}
-              </div>
-              <button
-                onClick={() => navigate('/organizer/dashboard')}
-                className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition"
-              >
-                Back
-              </button>
+    <div style={pageContainerStyle}>
+      <div style={mainCardStyle}>
+        {/* Header */}
+        <div style={headerStyle}>
+          <div>
+            <h1 style={quizTitleStyle}>{quiz?.title}</h1>
+            <div style={quizCodeContainerStyle}>
+              <span style={codeLabel}>Quiz Code:</span>
+              <span style={codeValueStyle}>{quiz?.code}</span>
+            </div>
+            {quiz?.description && (
+              <p style={descriptionStyle}>{quiz.description}</p>
+            )}
+          </div>
+          <button style={backButtonStyle} onClick={() => navigate('/organizer/dashboard')}>
+            ← Back
+          </button>
+        </div>
+
+        {/* Participants Count Bar */}
+        <div style={countBarStyle}>
+          <div style={countInfoStyle}>
+            <div style={participantBadgeStyle}>
+              {participants.length}
+            </div>
+            <div>
+              <h2 style={countTitleStyle}>
+                {participants.length} {participants.length === 1 ? 'Participant' : 'Participants'} Waiting
+              </h2>
+              <p style={countSubtitleStyle}>Ready to start the quiz</p>
             </div>
           </div>
+          <button
+            onClick={handleStartQuiz}
+            disabled={starting || participants.length === 0}
+            style={
+              participants.length === 0
+                ? startButtonDisabledStyle
+                : starting
+                ? startButtonLoadingStyle
+                : startButtonStyle
+            }
+          >
+            {starting ? '⏳ Starting...' : '🚀 Start Quiz'}
+          </button>
+        </div>
 
-          {/* Participants Count */}
-          <div className="bg-purple-50 p-6 border-b border-purple-100">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="bg-purple-600 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold">
-                  {participants.length}
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-800">
-                    {participants.length} {participants.length === 1 ? 'Participant' : 'Participants'} Waiting
-                  </h2>
-                  <p className="text-gray-600 text-sm">Ready to start the quiz</p>
-                </div>
-              </div>
-              <button
-                onClick={handleStartQuiz}
-                disabled={starting || participants.length === 0}
-                className={`px-8 py-3 rounded-lg font-semibold text-white transition ${
-                  participants.length === 0
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : starting
-                    ? 'bg-purple-400 cursor-wait'
-                    : 'bg-green-600 hover:bg-green-700'
-                }`}
-              >
-                {starting ? 'Starting...' : 'Start Quiz 🚀'}
-              </button>
+        {/* Participants List */}
+        <div style={participantsContainerStyle}>
+          {participants.length === 0 ? (
+            <div style={emptyStateStyle}>
+              <div style={emptyIconStyle}>⏳</div>
+              <h3 style={emptyTitleStyle}>Waiting for Participants</h3>
+              <p style={emptyMessageStyle}>
+                Share the quiz code <span style={emptyCodeStyle}>{quiz?.code}</span> with participants
+              </p>
+              <p style={emptySubMessageStyle}>Participants will appear here when they join</p>
             </div>
-          </div>
-
-          {/* Participants List */}
-          <div className="p-6">
-            {participants.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-4">⏳</div>
-                <h3 className="text-xl font-semibold text-gray-700 mb-2">Waiting for Participants</h3>
-                <p className="text-gray-600">Share the quiz code <span className="font-mono font-bold text-purple-600">{quiz?.code}</span> with participants</p>
-                <p className="text-gray-500 text-sm mt-2">Participants will appear here when they join</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Participants in Lobby</h3>
+          ) : (
+            <div>
+              <h3 style={listTitleStyle}>Participants in Lobby</h3>
+              <div style={participantListStyle}>
                 {participants.map((participant, index) => (
-                  <div
-                    key={participant.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="bg-purple-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-semibold">
+                  <div key={participant.id} style={participantCardStyle}>
+                    <div style={participantInfoStyle}>
+                      <div style={participantNumberStyle}>
                         {index + 1}
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-800">{participant.participantName}</p>
-                        <p className="text-sm text-gray-500">
+                        <p style={participantNameStyle}>{participant.participantName}</p>
+                        <p style={participantTimeStyle}>
                           Joined {new Date(participant.joinedAt).toLocaleTimeString()}
                         </p>
                       </div>
                     </div>
                     <button
                       onClick={() => handleRemoveParticipant(participant.id)}
-                      className="text-red-600 hover:text-red-800 px-3 py-1 rounded hover:bg-red-50 transition"
+                      style={removeButtonStyle}
                     >
                       Remove
                     </button>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* Instructions */}
-          <div className="bg-blue-50 border-t border-blue-100 p-6">
-            <div className="flex items-start space-x-3">
-              <span className="text-2xl">💡</span>
-              <div>
-                <h4 className="font-semibold text-blue-900 mb-1">Instructions</h4>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Share the quiz code with participants to join</li>
-                  <li>• Wait for all participants to join the lobby</li>
-                  <li>• Click "Start Quiz" when you're ready to begin</li>
-                  <li>• Participants will automatically be redirected when quiz starts</li>
-                </ul>
-              </div>
             </div>
+          )}
+        </div>
+
+        {/* Instructions */}
+        <div style={instructionsBoxStyle}>
+          <span style={instructionsIconStyle}>💡</span>
+          <div>
+            <h4 style={instructionsTitleStyle}>Instructions</h4>
+            <ul style={instructionsListStyle}>
+              <li>• Share the quiz code with participants to join</li>
+              <li>• Wait for all participants to join the lobby</li>
+              <li>• Click "Start Quiz" when you're ready to begin</li>
+              <li>• Participants will automatically be redirected when quiz starts</li>
+            </ul>
           </div>
         </div>
       </div>
     </div>
   );
 }
+
+// Styles
+const loadingContainerStyle: React.CSSProperties = {
+  minHeight: '100vh',
+  background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '1rem',
+};
+
+const spinnerStyle: React.CSSProperties = {
+  width: '48px',
+  height: '48px',
+  border: '4px solid #e0e0e0',
+  borderTop: '4px solid #8e44ad',
+  borderRadius: '50%',
+  animation: 'spin 1s linear infinite',
+};
+
+const loadingTextStyle: React.CSSProperties = {
+  color: '#7f8c8d',
+  fontSize: '1rem',
+};
+
+const errorContainerStyle: React.CSSProperties = {
+  minHeight: '100vh',
+  background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '1rem',
+};
+
+const errorCardStyle: React.CSSProperties = {
+  background: 'white',
+  borderRadius: '16px',
+  boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+  padding: '3rem',
+  maxWidth: '500px',
+  width: '100%',
+  textAlign: 'center',
+};
+
+const errorIconStyle: React.CSSProperties = {
+  fontSize: '4rem',
+  marginBottom: '1rem',
+};
+
+const errorTitleStyle: React.CSSProperties = {
+  fontSize: '1.75rem',
+  fontWeight: 'bold',
+  color: '#2c3e50',
+  marginBottom: '1rem',
+};
+
+const errorMessageStyle: React.CSSProperties = {
+  color: '#7f8c8d',
+  marginBottom: '2rem',
+  fontSize: '1rem',
+};
+
+const errorButtonStyle: React.CSSProperties = {
+  padding: '0.875rem 2rem',
+  background: '#8e44ad',
+  color: 'white',
+  border: 'none',
+  borderRadius: '8px',
+  fontSize: '1rem',
+  fontWeight: '500',
+  cursor: 'pointer',
+  transition: 'all 0.2s',
+};
+
+const pageContainerStyle: React.CSSProperties = {
+  minHeight: '100vh',
+  background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+  padding: '2rem 1rem',
+};
+
+const mainCardStyle: React.CSSProperties = {
+  maxWidth: '1000px',
+  margin: '0 auto',
+  background: 'white',
+  borderRadius: '16px',
+  boxShadow: '0 10px 40px rgba(0,0,0,0.1)',
+  overflow: 'hidden',
+};
+
+const headerStyle: React.CSSProperties = {
+  background: 'linear-gradient(135deg, #8e44ad 0%, #3498db 100%)',
+  padding: '2rem',
+  color: 'white',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'flex-start',
+  flexWrap: 'wrap',
+  gap: '1rem',
+};
+
+const quizTitleStyle: React.CSSProperties = {
+  fontSize: '2rem',
+  fontWeight: 'bold',
+  marginBottom: '0.5rem',
+  margin: 0,
+};
+
+const quizCodeContainerStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.5rem',
+  marginTop: '0.5rem',
+  marginBottom: '0.5rem',
+};
+
+const codeLabel: React.CSSProperties = {
+  fontSize: '0.95rem',
+  opacity: 0.9,
+};
+
+const codeValueStyle: React.CSSProperties = {
+  fontFamily: 'monospace',
+  fontSize: '1.1rem',
+  fontWeight: 'bold',
+  background: 'rgba(255,255,255,0.2)',
+  padding: '0.25rem 0.75rem',
+  borderRadius: '6px',
+  color: '#fff59d',
+};
+
+const descriptionStyle: React.CSSProperties = {
+  fontSize: '0.95rem',
+  opacity: 0.9,
+  marginTop: '0.5rem',
+  margin: 0,
+};
+
+const backButtonStyle: React.CSSProperties = {
+  padding: '0.75rem 1.5rem',
+  background: 'rgba(255,255,255,0.2)',
+  color: 'white',
+  border: 'none',
+  borderRadius: '8px',
+  fontSize: '1rem',
+  cursor: 'pointer',
+  transition: 'all 0.2s',
+  fontWeight: '500',
+};
+
+const countBarStyle: React.CSSProperties = {
+  background: 'linear-gradient(135deg, #f3e7f9 0%, #e1f5fe 100%)',
+  padding: '1.5rem 2rem',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: '1rem',
+  borderBottom: '1px solid #e8eaf6',
+};
+
+const countInfoStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '1rem',
+};
+
+const participantBadgeStyle: React.CSSProperties = {
+  background: 'linear-gradient(135deg, #8e44ad 0%, #3498db 100%)',
+  color: 'white',
+  width: '60px',
+  height: '60px',
+  borderRadius: '50%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '1.5rem',
+  fontWeight: 'bold',
+  boxShadow: '0 4px 12px rgba(142, 68, 173, 0.3)',
+};
+
+const countTitleStyle: React.CSSProperties = {
+  fontSize: '1.25rem',
+  fontWeight: '600',
+  color: '#2c3e50',
+  margin: 0,
+};
+
+const countSubtitleStyle: React.CSSProperties = {
+  fontSize: '0.9rem',
+  color: '#7f8c8d',
+  margin: 0,
+  marginTop: '0.25rem',
+};
+
+const startButtonStyle: React.CSSProperties = {
+  padding: '1rem 2rem',
+  background: 'linear-gradient(135deg, #27ae60 0%, #229954 100%)',
+  color: 'white',
+  border: 'none',
+  borderRadius: '10px',
+  fontSize: '1.1rem',
+  fontWeight: '600',
+  cursor: 'pointer',
+  transition: 'all 0.2s',
+  boxShadow: '0 4px 12px rgba(39, 174, 96, 0.3)',
+};
+
+const startButtonDisabledStyle: React.CSSProperties = {
+  ...startButtonStyle,
+  background: '#bdc3c7',
+  cursor: 'not-allowed',
+  boxShadow: 'none',
+};
+
+const startButtonLoadingStyle: React.CSSProperties = {
+  ...startButtonStyle,
+  background: '#95a5a6',
+  cursor: 'wait',
+};
+
+const participantsContainerStyle: React.CSSProperties = {
+  padding: '2rem',
+};
+
+const emptyStateStyle: React.CSSProperties = {
+  textAlign: 'center',
+  padding: '3rem 1rem',
+};
+
+const emptyIconStyle: React.CSSProperties = {
+  fontSize: '4rem',
+  marginBottom: '1rem',
+};
+
+const emptyTitleStyle: React.CSSProperties = {
+  fontSize: '1.5rem',
+  fontWeight: '600',
+  color: '#2c3e50',
+  marginBottom: '0.75rem',
+};
+
+const emptyMessageStyle: React.CSSProperties = {
+  fontSize: '1rem',
+  color: '#7f8c8d',
+  marginBottom: '0.5rem',
+};
+
+const emptyCodeStyle: React.CSSProperties = {
+  fontFamily: 'monospace',
+  fontWeight: 'bold',
+  color: '#8e44ad',
+  background: '#f3e7f9',
+  padding: '0.25rem 0.5rem',
+  borderRadius: '4px',
+};
+
+const emptySubMessageStyle: React.CSSProperties = {
+  fontSize: '0.9rem',
+  color: '#95a5a6',
+};
+
+const listTitleStyle: React.CSSProperties = {
+  fontSize: '1.25rem',
+  fontWeight: '600',
+  color: '#2c3e50',
+  marginBottom: '1rem',
+};
+
+const participantListStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '0.75rem',
+};
+
+const participantCardStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: '1rem 1.25rem',
+  background: '#f8f9fa',
+  borderRadius: '10px',
+  transition: 'all 0.2s',
+  border: '1px solid #e9ecef',
+};
+
+const participantInfoStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '1rem',
+};
+
+const participantNumberStyle: React.CSSProperties = {
+  background: 'linear-gradient(135deg, #8e44ad 0%, #3498db 100%)',
+  color: 'white',
+  width: '40px',
+  height: '40px',
+  borderRadius: '50%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontWeight: '600',
+  fontSize: '1rem',
+};
+
+const participantNameStyle: React.CSSProperties = {
+  fontWeight: '600',
+  color: '#2c3e50',
+  margin: 0,
+  fontSize: '1rem',
+};
+
+const participantTimeStyle: React.CSSProperties = {
+  fontSize: '0.85rem',
+  color: '#95a5a6',
+  margin: 0,
+  marginTop: '0.25rem',
+};
+
+const removeButtonStyle: React.CSSProperties = {
+  color: '#e74c3c',
+  background: 'transparent',
+  border: 'none',
+  padding: '0.5rem 1rem',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  transition: 'all 0.2s',
+  fontSize: '0.9rem',
+  fontWeight: '500',
+};
+
+const instructionsBoxStyle: React.CSSProperties = {
+  background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
+  borderTop: '2px solid #b39ddb',
+  padding: '1.5rem 2rem',
+  display: 'flex',
+  gap: '1rem',
+};
+
+const instructionsIconStyle: React.CSSProperties = {
+  fontSize: '1.75rem',
+  flexShrink: 0,
+};
+
+const instructionsTitleStyle: React.CSSProperties = {
+  fontWeight: '600',
+  color: '#4a148c',
+  marginBottom: '0.75rem',
+  fontSize: '1.05rem',
+  margin: 0,
+  marginBottom: '0.5rem',
+};
+
+const instructionsListStyle: React.CSSProperties = {
+  fontSize: '0.9rem',
+  color: '#6a1b9a',
+  lineHeight: '1.8',
+  margin: 0,
+  paddingLeft: '0',
+  listStyle: 'none',
+};

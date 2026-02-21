@@ -15,6 +15,7 @@ interface Participant {
   startedAt: string;
   completedAt: string | null;
   answersCount: number;
+  timeSpent?: number;
 }
 
 interface Quiz {

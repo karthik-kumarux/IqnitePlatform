@@ -643,8 +643,6 @@ const instructionsTitleStyle: React.CSSProperties = {
   color: '#4a148c',
   marginBottom: '0.75rem',
   fontSize: '1.05rem',
-  margin: 0,
-  marginBottom: '0.5rem',
 };
 
 const instructionsListStyle: React.CSSProperties = {

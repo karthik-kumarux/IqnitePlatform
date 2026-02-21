@@ -22,6 +22,7 @@ export interface Quiz {
   scheduledAt?: string;
   expiresAt?: string;
   isActive: boolean;
+  status?: 'DRAFT' | 'ACTIVE' | 'COMPLETED' | 'ARCHIVED' | 'WAITING' | 'IN_PROGRESS';
   createdAt: string;
   updatedAt: string;
   organizer?: {
@@ -33,6 +34,7 @@ export interface Quiz {
   _count?: {
     questions: number;
     sessions: number;
+    guestSessions?: number;
   };
 }
 

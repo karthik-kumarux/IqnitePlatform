@@ -104,7 +104,7 @@ const OrganizerDashboard = () => {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
                   <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#2c3e50' }}>{quiz.title}</h3>
-                  <span style={getStatusBadgeStyle(quiz.status)}>
+                  <span style={getStatusBadgeStyle(quiz.status || 'DRAFT')}>
                     {quiz.status || 'DRAFT'}
                   </span>
                 </div>
@@ -146,7 +146,7 @@ const OrganizerDashboard = () => {
                 >
                   Edit
                 </button>
-                {(quiz.status === 'COMPLETED' || quiz.status === 'IN_PROGRESS') && (
+                {(quiz.status === 'COMPLETED' || quiz.status === 'IN_PROGRESS' || quiz.status === 'ACTIVE') && (
                   <button
                     style={btnResetStyle}
                     onClick={() => resetQuiz(quiz.id)}

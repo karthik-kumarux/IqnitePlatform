@@ -180,10 +180,10 @@ const OrganizerDashboardEnhanced = () => {
                 <span style={{
                   ...statusBadgeStyle,
                   background: quiz.status === 'COMPLETED' ? '#95a5a6' : 
-                             quiz.status === 'IN_PROGRESS' ? '#27ae60' :
-                             quiz.status === 'WAITING' ? '#f39c12' : '#3498db'
+                             quiz.status === 'IN_PROGRESS' || quiz.status === 'ACTIVE' ? '#27ae60' :
+                             quiz.status === 'WAITING' || quiz.status === 'DRAFT' ? '#f39c12' : '#3498db'
                 }}>
-                  {quiz.status}
+                  {quiz.status || 'DRAFT'}
                 </span>
               </div>
               {quiz.description && <p style={descStyle}>{quiz.description}</p>}

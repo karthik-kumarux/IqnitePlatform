@@ -120,6 +120,53 @@ let QuestionService = class QuestionService {
         })));
         return createdQuestions;
     }
+    async getQuestionsForQuiz(quizId, options) {
+        const whereClause = {
+            quizId,
+            isActive: true,
+        };
+        if (options?.tags && options.tags.length > 0) {
+            whereClause.tags = {
+                hasSome: options.tags,
+            };
+        }
+        if (options?.difficulty) {
+            whereClause.difficulty = options.difficulty;
+        }
+        let questions = await this.prisma.question.findMany({
+            where: whereClause,
+            orderBy: options?.shuffle ? undefined : { order: 'asc' },
+        });
+        if (options?.shuffle) {
+            questions = this.shuffleArray(questions);
+        }
+        if (options?.limit && options.limit < questions.length) {
+            questions = questions.slice(0, options.limit);
+        }
+        return questions;
+    }
+    shuffleArray(array) {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    }
+    shuffleOptions(question) {
+        if (question.type !== 'MULTIPLE_CHOICE' || !question.options) {
+            return question;
+        }
+        const options = [...question.options];
+        const correctIndex = options.indexOf(question.correctAnswer);
+        const shuffled = this.shuffleArray(options);
+        const newCorrectAnswer = shuffled[shuffled.indexOf(question.correctAnswer)];
+        return {
+            ...question,
+            options: shuffled,
+            correctAnswer: newCorrectAnswer,
+        };
+    }
 };
 exports.QuestionService = QuestionService;
 exports.QuestionService = QuestionService = __decorate([

@@ -5,19 +5,43 @@ export declare class AuthController {
     private readonly authService;
     constructor(authService: AuthService);
     register(registerDto: RegisterDto): Promise<{
-        accessToken: string;
-        refreshToken: string;
         user: {
             id: string;
-            isActive: boolean;
-            createdAt: Date;
             email: string;
             username: string;
             firstName: string | null;
             lastName: string | null;
             role: import("@prisma/client").$Enums.UserRole;
+            isActive: boolean;
             isVerified: boolean;
+            createdAt: Date;
         };
+        accessToken: string;
+        refreshToken: string;
+    }>;
+    verifyOtp(body: {
+        email: string;
+        otp: string;
+    }): Promise<{
+        accessToken: string;
+        refreshToken: string;
+        message: string;
+        user: {
+            id: string;
+            email: string;
+            username: string;
+            firstName: string | null;
+            lastName: string | null;
+            role: import("@prisma/client").$Enums.UserRole;
+            isActive: boolean;
+            isVerified: boolean;
+            createdAt: Date;
+        };
+    }>;
+    resendOtp(body: {
+        email: string;
+    }): Promise<{
+        message: string;
     }>;
     login(loginDto: LoginDto): Promise<{
         accessToken: string;
@@ -45,4 +69,13 @@ export declare class AuthController {
         message: string;
     }>;
     getProfile(req: any): Promise<any>;
+    forgotPassword(email: string): Promise<{
+        message: string;
+    }>;
+    resetPassword(body: {
+        token: string;
+        newPassword: string;
+    }): Promise<{
+        message: string;
+    }>;
 }

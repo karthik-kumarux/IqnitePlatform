@@ -9,4 +9,8 @@ export declare class CreateQuizDto {
     shuffleQuestions?: boolean;
     scheduledAt?: string;
     expiresAt?: string;
+    randomizeOptions?: boolean;
+    enableAdaptiveDifficulty?: boolean;
+    questionPoolSize?: number;
+    questionPoolTags?: string[];
 }

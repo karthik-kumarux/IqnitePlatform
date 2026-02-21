@@ -9,6 +9,8 @@ import {
   UseGuards,
   Request,
   Query,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { QuizService } from './quiz.service';
 import { CreateQuizDto } from './dto/create-quiz.dto';
@@ -16,6 +18,8 @@ import { UpdateQuizDto } from './dto/update-quiz.dto';
 import { JoinQuizDto } from './dto/join-quiz.dto';
 import { JoinLobbyDto } from './dto/join-lobby.dto';
 import { SubmitGuestQuizDto } from './dto/submit-guest-quiz.dto';
+import { BulkOperationDto } from './dto/bulk-operation.dto';
+import { ExportQuizzesDto } from './dto/export-quiz.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('quiz')
@@ -30,10 +34,20 @@ export class QuizController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
-  findAll(@Request() req, @Query('myQuizzes') myQuizzes?: string, @Query('public') isPublic?: string) {
+  findAll(
+    @Request() req, 
+    @Query('myQuizzes') myQuizzes?: string, 
+    @Query('public') isPublic?: string,
+    @Query('includeArchived') includeArchived?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     const organizerId = myQuizzes === 'true' ? req.user.id : undefined;
     const publicFilter = isPublic === 'true' ? true : isPublic === 'false' ? false : undefined;
-    return this.quizService.findAll(organizerId, publicFilter);
+    const includeArchivedFlag = includeArchived === 'true';
+    const pageNum = page ? parseInt(page) : 1;
+    const limitNum = limit ? parseInt(limit) : 10;
+    return this.quizService.findAll(organizerId, publicFilter, includeArchivedFlag, pageNum, limitNum);
   }
 
   @Get(':id')
@@ -115,5 +129,72 @@ export class QuizController {
   @UseGuards(JwtAuthGuard)
   clearLobby(@Request() req, @Param('id') id: string) {
     return this.quizService.clearLobby(id);
+  }
+
+  @Post(':id/reset')
+  @UseGuards(JwtAuthGuard)
+  resetQuiz(@Request() req, @Param('id') id: string) {
+    return this.quizService.resetQuiz(id, req.user.id);
+  }
+
+  // Quiz History - Get active quiz
+  @Get('organizer/active')
+  @UseGuards(JwtAuthGuard)
+  getActiveQuiz(@Request() req) {
+    return this.quizService.getActiveQuiz(req.user.id);
+  }
+
+  // Quiz History - Get recent/completed quizzes
+  @Get('organizer/recent')
+  @UseGuards(JwtAuthGuard)
+  getRecentQuizzes(
+    @Request() req,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page) : 1;
+    const limitNum = limit ? parseInt(limit) : 10;
+    return this.quizService.getRecentQuizzes(req.user.id, pageNum, limitNum);
+  }
+
+  // Quiz History - Get detailed results for a completed quiz
+  @Get(':id/results')
+  @UseGuards(JwtAuthGuard)
+  getQuizResults(@Request() req, @Param('id') id: string) {
+    return this.quizService.getQuizResults(id, req.user.id);
+  }
+
+  // Bulk Operations
+  @Post('bulk/operation')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  bulkOperation(@Request() req, @Body() bulkOperationDto: BulkOperationDto) {
+    return this.quizService.bulkOperation(req.user.id, bulkOperationDto);
+  }
+
+  // Export/Import
+  @Post('export')
+  @UseGuards(JwtAuthGuard)
+  exportQuizzes(@Request() req, @Body() exportDto: ExportQuizzesDto) {
+    return this.quizService.exportQuizzes(req.user.id, exportDto);
+  }
+
+  @Post('import')
+  @UseGuards(JwtAuthGuard)
+  importQuizzes(@Request() req, @Body('backupData') backupData: any) {
+    return this.quizService.importQuizzes(req.user.id, backupData);
+  }
+
+  // Archive Operations
+  @Post(':id/archive')
+  @UseGuards(JwtAuthGuard)
+  archiveQuiz(@Request() req, @Param('id') id: string) {
+    return this.quizService.archiveQuiz(id, req.user.id);
+  }
+
+  @Post(':id/unarchive')
+  @UseGuards(JwtAuthGuard)
+  unarchiveQuiz(@Request() req, @Param('id') id: string) {
+    return this.quizService.unarchiveQuiz(id, req.user.id);
   }
 }

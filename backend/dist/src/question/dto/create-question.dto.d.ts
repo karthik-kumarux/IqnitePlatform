@@ -9,4 +9,9 @@ export declare class CreateQuestionDto {
     timeLimit?: number;
     order?: number;
     explanation?: string;
+    imageUrl?: string;
+    videoUrl?: string;
+    difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+    tags?: string[];
+    isActive?: boolean;
 }

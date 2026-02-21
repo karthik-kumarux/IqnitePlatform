@@ -20,6 +20,8 @@ const update_quiz_dto_1 = require("./dto/update-quiz.dto");
 const join_quiz_dto_1 = require("./dto/join-quiz.dto");
 const join_lobby_dto_1 = require("./dto/join-lobby.dto");
 const submit_guest_quiz_dto_1 = require("./dto/submit-guest-quiz.dto");
+const bulk_operation_dto_1 = require("./dto/bulk-operation.dto");
+const export_quiz_dto_1 = require("./dto/export-quiz.dto");
 const jwt_auth_guard_1 = require("../auth/guards/jwt-auth.guard");
 let QuizController = class QuizController {
     quizService;
@@ -29,10 +31,13 @@ let QuizController = class QuizController {
     create(req, createQuizDto) {
         return this.quizService.create(req.user.id, createQuizDto);
     }
-    findAll(req, myQuizzes, isPublic) {
+    findAll(req, myQuizzes, isPublic, includeArchived, page, limit) {
         const organizerId = myQuizzes === 'true' ? req.user.id : undefined;
         const publicFilter = isPublic === 'true' ? true : isPublic === 'false' ? false : undefined;
-        return this.quizService.findAll(organizerId, publicFilter);
+        const includeArchivedFlag = includeArchived === 'true';
+        const pageNum = page ? parseInt(page) : 1;
+        const limitNum = limit ? parseInt(limit) : 10;
+        return this.quizService.findAll(organizerId, publicFilter, includeArchivedFlag, pageNum, limitNum);
     }
     findOne(id) {
         return this.quizService.findOne(id);
@@ -77,6 +82,35 @@ let QuizController = class QuizController {
     clearLobby(req, id) {
         return this.quizService.clearLobby(id);
     }
+    resetQuiz(req, id) {
+        return this.quizService.resetQuiz(id, req.user.id);
+    }
+    getActiveQuiz(req) {
+        return this.quizService.getActiveQuiz(req.user.id);
+    }
+    getRecentQuizzes(req, page, limit) {
+        const pageNum = page ? parseInt(page) : 1;
+        const limitNum = limit ? parseInt(limit) : 10;
+        return this.quizService.getRecentQuizzes(req.user.id, pageNum, limitNum);
+    }
+    getQuizResults(req, id) {
+        return this.quizService.getQuizResults(id, req.user.id);
+    }
+    bulkOperation(req, bulkOperationDto) {
+        return this.quizService.bulkOperation(req.user.id, bulkOperationDto);
+    }
+    exportQuizzes(req, exportDto) {
+        return this.quizService.exportQuizzes(req.user.id, exportDto);
+    }
+    importQuizzes(req, backupData) {
+        return this.quizService.importQuizzes(req.user.id, backupData);
+    }
+    archiveQuiz(req, id) {
+        return this.quizService.archiveQuiz(id, req.user.id);
+    }
+    unarchiveQuiz(req, id) {
+        return this.quizService.unarchiveQuiz(id, req.user.id);
+    }
 };
 exports.QuizController = QuizController;
 __decorate([
@@ -94,8 +128,11 @@ __decorate([
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Query)('myQuizzes')),
     __param(2, (0, common_1.Query)('public')),
+    __param(3, (0, common_1.Query)('includeArchived')),
+    __param(4, (0, common_1.Query)('page')),
+    __param(5, (0, common_1.Query)('limit')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:paramtypes", [Object, String, String, String, String, String]),
     __metadata("design:returntype", void 0)
 ], QuizController.prototype, "findAll", null);
 __decorate([
@@ -208,6 +245,88 @@ __decorate([
     __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", void 0)
 ], QuizController.prototype, "clearLobby", null);
+__decorate([
+    (0, common_1.Post)(':id/reset'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], QuizController.prototype, "resetQuiz", null);
+__decorate([
+    (0, common_1.Get)('organizer/active'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], QuizController.prototype, "getActiveQuiz", null);
+__decorate([
+    (0, common_1.Get)('organizer/recent'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Query)('page')),
+    __param(2, (0, common_1.Query)('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, String]),
+    __metadata("design:returntype", void 0)
+], QuizController.prototype, "getRecentQuizzes", null);
+__decorate([
+    (0, common_1.Get)(':id/results'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], QuizController.prototype, "getQuizResults", null);
+__decorate([
+    (0, common_1.Post)('bulk/operation'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, bulk_operation_dto_1.BulkOperationDto]),
+    __metadata("design:returntype", void 0)
+], QuizController.prototype, "bulkOperation", null);
+__decorate([
+    (0, common_1.Post)('export'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, export_quiz_dto_1.ExportQuizzesDto]),
+    __metadata("design:returntype", void 0)
+], QuizController.prototype, "exportQuizzes", null);
+__decorate([
+    (0, common_1.Post)('import'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)('backupData')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], QuizController.prototype, "importQuizzes", null);
+__decorate([
+    (0, common_1.Post)(':id/archive'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], QuizController.prototype, "archiveQuiz", null);
+__decorate([
+    (0, common_1.Post)(':id/unarchive'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], QuizController.prototype, "unarchiveQuiz", null);
 exports.QuizController = QuizController = __decorate([
     (0, common_1.Controller)('quiz'),
     __metadata("design:paramtypes", [quiz_service_1.QuizService])

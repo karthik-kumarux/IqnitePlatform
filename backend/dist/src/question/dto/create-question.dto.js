@@ -22,6 +22,11 @@ class CreateQuestionDto {
     timeLimit;
     order = 0;
     explanation;
+    imageUrl;
+    videoUrl;
+    difficulty = 'MEDIUM';
+    tags = [];
+    isActive = true;
 }
 exports.CreateQuestionDto = CreateQuestionDto;
 __decorate([
@@ -72,4 +77,29 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CreateQuestionDto.prototype, "explanation", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreateQuestionDto.prototype, "imageUrl", void 0);
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreateQuestionDto.prototype, "videoUrl", void 0);
+__decorate([
+    (0, class_validator_1.IsEnum)(['EASY', 'MEDIUM', 'HARD']),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", String)
+], CreateQuestionDto.prototype, "difficulty", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Array)
+], CreateQuestionDto.prototype, "tags", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Boolean)
+], CreateQuestionDto.prototype, "isActive", void 0);
 //# sourceMappingURL=create-question.dto.js.map

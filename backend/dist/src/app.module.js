@@ -18,6 +18,9 @@ const health_module_1 = require("./health/health.module");
 const quiz_module_1 = require("./quiz/quiz.module");
 const question_module_1 = require("./question/question.module");
 const session_module_1 = require("./session/session.module");
+const upload_module_1 = require("./upload/upload.module");
+const admin_module_1 = require("./admin/admin.module");
+const audit_log_module_1 = require("./audit-log/audit-log.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -40,6 +43,9 @@ exports.AppModule = AppModule = __decorate([
             quiz_module_1.QuizModule,
             question_module_1.QuestionModule,
             session_module_1.SessionModule,
+            upload_module_1.UploadModule,
+            admin_module_1.AdminModule,
+            audit_log_module_1.AuditLogModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

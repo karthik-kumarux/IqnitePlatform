@@ -9,6 +9,9 @@ import { HealthModule } from './health/health.module';
 import { QuizModule } from './quiz/quiz.module';
 import { QuestionModule } from './question/question.module';
 import { SessionModule } from './session/session.module';
+import { UploadModule } from './upload/upload.module';
+import { AdminModule } from './admin/admin.module';
+import { AuditLogModule } from './audit-log/audit-log.module';
 
 @Module({
   imports: [
@@ -28,6 +31,9 @@ import { SessionModule } from './session/session.module';
     QuizModule,
     QuestionModule,
     SessionModule,
+    UploadModule,
+    AdminModule,
+    AuditLogModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,25 +1,47 @@
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 export declare class AuthService {
     private prisma;
     private jwtService;
-    constructor(prisma: PrismaService, jwtService: JwtService);
+    private emailService;
+    constructor(prisma: PrismaService, jwtService: JwtService, emailService: EmailService);
+    private generateOtp;
     register(registerDto: RegisterDto): Promise<{
-        accessToken: string;
-        refreshToken: string;
         user: {
             id: string;
-            isActive: boolean;
-            createdAt: Date;
             email: string;
             username: string;
             firstName: string | null;
             lastName: string | null;
             role: import("@prisma/client").$Enums.UserRole;
+            isActive: boolean;
             isVerified: boolean;
+            createdAt: Date;
         };
+        accessToken: string;
+        refreshToken: string;
+    }>;
+    verifyOtp(email: string, otp: string): Promise<{
+        accessToken: string;
+        refreshToken: string;
+        message: string;
+        user: {
+            id: string;
+            email: string;
+            username: string;
+            firstName: string | null;
+            lastName: string | null;
+            role: import("@prisma/client").$Enums.UserRole;
+            isActive: boolean;
+            isVerified: boolean;
+            createdAt: Date;
+        };
+    }>;
+    resendOtp(email: string): Promise<{
+        message: string;
     }>;
     login(loginDto: LoginDto): Promise<{
         accessToken: string;
@@ -37,12 +59,12 @@ export declare class AuthService {
     }>;
     validateUser(userId: string): Promise<{
         id: string;
-        isActive: boolean;
         email: string;
         username: string;
         firstName: string | null;
         lastName: string | null;
         role: import("@prisma/client").$Enums.UserRole;
+        isActive: boolean;
         isVerified: boolean;
     }>;
     private generateTokens;
@@ -51,6 +73,12 @@ export declare class AuthService {
         refreshToken: string;
     }>;
     logout(userId: string, refreshToken: string): Promise<{
+        message: string;
+    }>;
+    initiatePasswordReset(email: string): Promise<{
+        message: string;
+    }>;
+    resetPassword(token: string, newPassword: string): Promise<{
         message: string;
     }>;
 }

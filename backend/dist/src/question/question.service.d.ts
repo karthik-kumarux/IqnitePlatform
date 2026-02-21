@@ -6,31 +6,41 @@ export declare class QuestionService {
     constructor(prisma: PrismaService);
     create(organizerId: string, createQuestionDto: CreateQuestionDto): Promise<{
         id: string;
+        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         question: string;
         quizId: string;
-        order: number;
         type: import("@prisma/client").$Enums.QuestionType;
         options: import("@prisma/client/runtime/client").JsonValue | null;
         correctAnswer: string;
         points: number;
         timeLimit: number | null;
+        order: number;
         explanation: string | null;
+        imageUrl: string | null;
+        videoUrl: string | null;
+        difficulty: import("@prisma/client").$Enums.QuestionDifficulty;
+        tags: string[];
     }>;
     findByQuiz(quizId: string): Promise<{
         id: string;
+        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         question: string;
         quizId: string;
-        order: number;
         type: import("@prisma/client").$Enums.QuestionType;
         options: import("@prisma/client/runtime/client").JsonValue | null;
         correctAnswer: string;
         points: number;
         timeLimit: number | null;
+        order: number;
         explanation: string | null;
+        imageUrl: string | null;
+        videoUrl: string | null;
+        difficulty: import("@prisma/client").$Enums.QuestionDifficulty;
+        tags: string[];
     }[]>;
     findOne(id: string): Promise<{
         quiz: {
@@ -40,47 +50,88 @@ export declare class QuestionService {
         };
     } & {
         id: string;
+        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         question: string;
         quizId: string;
-        order: number;
         type: import("@prisma/client").$Enums.QuestionType;
         options: import("@prisma/client/runtime/client").JsonValue | null;
         correctAnswer: string;
         points: number;
         timeLimit: number | null;
+        order: number;
         explanation: string | null;
+        imageUrl: string | null;
+        videoUrl: string | null;
+        difficulty: import("@prisma/client").$Enums.QuestionDifficulty;
+        tags: string[];
     }>;
     update(id: string, organizerId: string, updateQuestionDto: UpdateQuestionDto): Promise<{
         id: string;
+        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         question: string;
         quizId: string;
-        order: number;
         type: import("@prisma/client").$Enums.QuestionType;
         options: import("@prisma/client/runtime/client").JsonValue | null;
         correctAnswer: string;
         points: number;
         timeLimit: number | null;
+        order: number;
         explanation: string | null;
+        imageUrl: string | null;
+        videoUrl: string | null;
+        difficulty: import("@prisma/client").$Enums.QuestionDifficulty;
+        tags: string[];
     }>;
     remove(id: string, organizerId: string): Promise<{
         message: string;
     }>;
     bulkCreate(organizerId: string, quizId: string, questions: CreateQuestionDto[]): Promise<{
         id: string;
+        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
         question: string;
         quizId: string;
-        order: number;
         type: import("@prisma/client").$Enums.QuestionType;
         options: import("@prisma/client/runtime/client").JsonValue | null;
         correctAnswer: string;
         points: number;
         timeLimit: number | null;
+        order: number;
         explanation: string | null;
+        imageUrl: string | null;
+        videoUrl: string | null;
+        difficulty: import("@prisma/client").$Enums.QuestionDifficulty;
+        tags: string[];
     }[]>;
+    getQuestionsForQuiz(quizId: string, options?: {
+        shuffle?: boolean;
+        limit?: number;
+        tags?: string[];
+        difficulty?: string;
+    }): Promise<{
+        id: string;
+        isActive: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        question: string;
+        quizId: string;
+        type: import("@prisma/client").$Enums.QuestionType;
+        options: import("@prisma/client/runtime/client").JsonValue | null;
+        correctAnswer: string;
+        points: number;
+        timeLimit: number | null;
+        order: number;
+        explanation: string | null;
+        imageUrl: string | null;
+        videoUrl: string | null;
+        difficulty: import("@prisma/client").$Enums.QuestionDifficulty;
+        tags: string[];
+    }[]>;
+    private shuffleArray;
+    shuffleOptions(question: any): any;
 }

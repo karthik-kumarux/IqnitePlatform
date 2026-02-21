@@ -10,6 +10,7 @@ exports.QuizModule = void 0;
 const common_1 = require("@nestjs/common");
 const quiz_service_1 = require("./quiz.service");
 const quiz_controller_1 = require("./quiz.controller");
+const quiz_gateway_1 = require("./quiz.gateway");
 const prisma_module_1 = require("../prisma/prisma.module");
 let QuizModule = class QuizModule {
 };
@@ -18,8 +19,8 @@ exports.QuizModule = QuizModule = __decorate([
     (0, common_1.Module)({
         imports: [prisma_module_1.PrismaModule],
         controllers: [quiz_controller_1.QuizController],
-        providers: [quiz_service_1.QuizService],
-        exports: [quiz_service_1.QuizService],
+        providers: [quiz_service_1.QuizService, quiz_gateway_1.QuizGateway],
+        exports: [quiz_service_1.QuizService, quiz_gateway_1.QuizGateway],
     })
 ], QuizModule);
 //# sourceMappingURL=quiz.module.js.map

@@ -23,11 +23,11 @@ export declare class SessionController {
         questions: {
             id: string;
             question: string;
-            order: number;
             type: import("@prisma/client").$Enums.QuestionType;
             options: import("@prisma/client/runtime/client").JsonValue;
             points: number;
             timeLimit: number | null;
+            order: number;
         }[];
         answeredQuestions: {
             answer: string;
@@ -52,11 +52,11 @@ export declare class SessionController {
         questions: {
             id: string;
             question: string;
-            order: number;
             type: import("@prisma/client").$Enums.QuestionType;
             options: import("@prisma/client/runtime/client").JsonValue;
             points: number;
             timeLimit: number | null;
+            order: number;
         }[];
     }>;
     submitAnswer(req: any, sessionId: string, submitAnswerDto: SubmitAnswerDto): Promise<{
@@ -104,11 +104,11 @@ export declare class SessionController {
         questions: {
             id: string;
             question: string;
-            order: number;
             type: import("@prisma/client").$Enums.QuestionType;
             options: import("@prisma/client/runtime/client").JsonValue;
             points: number;
             timeLimit: number | null;
+            order: number;
         }[];
         answeredQuestions: {
             answer: string;

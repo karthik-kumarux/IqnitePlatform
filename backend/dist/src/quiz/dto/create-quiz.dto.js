@@ -22,6 +22,10 @@ class CreateQuizDto {
     shuffleQuestions = false;
     scheduledAt;
     expiresAt;
+    randomizeOptions = false;
+    enableAdaptiveDifficulty = false;
+    questionPoolSize;
+    questionPoolTags = [];
 }
 exports.CreateQuizDto = CreateQuizDto;
 __decorate([
@@ -78,4 +82,26 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", String)
 ], CreateQuizDto.prototype, "expiresAt", void 0);
+__decorate([
+    (0, class_validator_1.IsBoolean)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Boolean)
+], CreateQuizDto.prototype, "randomizeOptions", void 0);
+__decorate([
+    (0, class_validator_1.IsBoolean)(),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Boolean)
+], CreateQuizDto.prototype, "enableAdaptiveDifficulty", void 0);
+__decorate([
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.Min)(1),
+    __metadata("design:type", Number)
+], CreateQuizDto.prototype, "questionPoolSize", void 0);
+__decorate([
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.IsString)({ each: true }),
+    (0, class_validator_1.IsOptional)(),
+    __metadata("design:type", Array)
+], CreateQuizDto.prototype, "questionPoolTags", void 0);
 //# sourceMappingURL=create-quiz.dto.js.map

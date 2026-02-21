@@ -3,10 +3,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
 import { SubmitGuestQuizDto } from './dto/submit-guest-quiz.dto';
+import { BulkOperationDto, BulkOperationType } from './dto/bulk-operation.dto';
+import { ExportQuizzesDto } from './dto/export-quiz.dto';
+import { QuizGateway } from './quiz.gateway';
 
 @Injectable()
 export class QuizService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private quizGateway: QuizGateway,
+  ) {}
 
   // Generate unique 6-character quiz code
   private generateQuizCode(): string {
@@ -59,7 +65,7 @@ export class QuizService {
     return quiz;
   }
 
-  async findAll(organizerId?: string, isPublic?: boolean) {
+  async findAll(organizerId?: string, isPublic?: boolean, includeArchived = false, page = 1, limit = 10) {
     const where: any = {};
     
     if (organizerId) {
@@ -70,30 +76,50 @@ export class QuizService {
       where.isPublic = isPublic;
     }
 
-    const quizzes = await this.prisma.quiz.findMany({
-      where,
-      include: {
-        organizer: {
-          select: {
-            id: true,
-            username: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        _count: {
-          select: {
-            questions: true,
-            sessions: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    // By default, exclude archived quizzes
+    if (!includeArchived) {
+      where.isArchived = false;
+    }
 
-    return quizzes;
+    const skip = (page - 1) * limit;
+
+    const [quizzes, total] = await Promise.all([
+      this.prisma.quiz.findMany({
+        where,
+        skip,
+        take: limit,
+        include: {
+          organizer: {
+            select: {
+              id: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          _count: {
+            select: {
+              questions: true,
+              sessions: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+      this.prisma.quiz.count({ where }),
+    ]);
+
+    return {
+      data: quizzes,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findOne(id: string) {
@@ -184,13 +210,21 @@ export class QuizService {
       throw new ForbiddenException('You are not authorized to update this quiz');
     }
 
+    // If quiz was COMPLETED and being edited, reset to DRAFT for reuse
+    const updateData: any = {
+      ...updateQuizDto,
+      scheduledAt: updateQuizDto.scheduledAt ? new Date(updateQuizDto.scheduledAt) : undefined,
+      expiresAt: updateQuizDto.expiresAt ? new Date(updateQuizDto.expiresAt) : undefined,
+    };
+
+    // Reset COMPLETED quizzes to DRAFT when edited (allows reuse)
+    if (quiz.status === 'COMPLETED' && !updateQuizDto.status) {
+      updateData.status = 'DRAFT';
+    }
+
     const updatedQuiz = await this.prisma.quiz.update({
       where: { id },
-      data: {
-        ...updateQuizDto,
-        scheduledAt: updateQuizDto.scheduledAt ? new Date(updateQuizDto.scheduledAt) : undefined,
-        expiresAt: updateQuizDto.expiresAt ? new Date(updateQuizDto.expiresAt) : undefined,
-      },
+      data: updateData,
       include: {
         organizer: {
           select: {
@@ -292,10 +326,32 @@ export class QuizService {
   }
 
   async getQuizQuestions(quizId: string) {
-    const quiz = await this.prisma.quiz.findUnique({ 
+    const quiz = await this.prisma.quiz.findUnique({
       where: { id: quizId },
-      include: {
+      select: {
+        id: true,
+        code: true,
+        title: true,
+        description: true,
+        organizerId: true,
+        isPublic: true,
+        duration: true,
+        passingScore: true,
+        maxAttempts: true,
+        showAnswers: true,
+        shuffleQuestions: true,
+        randomizeOptions: true,
+        enableAdaptiveDifficulty: true,
+        questionPoolSize: true,
+        questionPoolTags: true,
+        scheduledAt: true,
+        expiresAt: true,
+        isActive: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
         questions: {
+          where: { isActive: true },
           orderBy: {
             order: 'asc',
           },
@@ -310,6 +366,11 @@ export class QuizService {
             timeLimit: true,
             order: true,
             explanation: true,
+            imageUrl: true,
+            videoUrl: true,
+            difficulty: true,
+            tags: true,
+            isActive: true,
           },
         },
       },
@@ -319,16 +380,68 @@ export class QuizService {
       throw new NotFoundException('Quiz not found');
     }
 
-    return quiz.questions;
+    let questions = [...quiz.questions];
+
+    // Apply question pool filtering if configured
+    if (quiz.questionPoolTags && quiz.questionPoolTags.length > 0) {
+      questions = questions.filter(q => 
+        q.tags.some(tag => quiz.questionPoolTags.includes(tag))
+      );
+    }
+
+    // Shuffle questions if enabled
+    if (quiz.shuffleQuestions) {
+      questions = this.shuffleArray(questions);
+    }
+
+    // Limit to pool size if specified
+    if (quiz.questionPoolSize && quiz.questionPoolSize < questions.length) {
+      questions = questions.slice(0, quiz.questionPoolSize);
+    }
+
+    // Randomize MCQ options if enabled
+    if (quiz.randomizeOptions) {
+      questions = questions.map(q => {
+        if (q.type === 'MULTIPLE_CHOICE' && q.options) {
+          return this.randomizeQuestionOptions(q);
+        }
+        return q;
+      });
+    }
+
+    return questions;
   }
 
-  // Lobby Management Methods
+  // Helper method to shuffle array
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  // Helper method to randomize MCQ options
+  private randomizeQuestionOptions(question: any): any {
+    const options = [...(question.options as string[])];
+    const correctAnswer = question.correctAnswer;
+    
+    // Shuffle the options array
+    const shuffled = this.shuffleArray(options);
+    
+    return {
+      ...question,
+      options: shuffled,
+      correctAnswer, // Keep the same correct answer value
+    };
+  }  // Lobby Management Methods
   async joinLobby(participantName: string, quizCode: string) {
     console.log('Join lobby request:', { participantName, quizCode });
     
     const quiz = await this.prisma.quiz.findUnique({ 
       where: { code: quizCode },
-      select: { id: true, title: true, status: true }
+      select: { id: true, title: true, status: true, expiresAt: true }
     });
 
     console.log('Quiz found:', quiz);
@@ -337,22 +450,23 @@ export class QuizService {
       throw new NotFoundException('Quiz not found');
     }
 
+    // Check if quiz has expired
+    if (quiz.expiresAt && new Date() > quiz.expiresAt) {
+      throw new BadRequestException('Quiz has expired and is no longer available');
+    }
+
     const currentStatus = quiz.status || 'DRAFT';
 
-    if (currentStatus === 'COMPLETED') {
-      throw new BadRequestException('Quiz has already been completed');
-    }
-
-    if (currentStatus === 'IN_PROGRESS') {
-      throw new BadRequestException('Quiz has already started');
-    }
-
-    // Update quiz status to WAITING if it's still in DRAFT or null
-    if (currentStatus === 'DRAFT' || !quiz.status) {
+    // Allow participants to join at any time before expiry
+    // Update quiz status to WAITING if it's still in DRAFT or COMPLETED
+    if (currentStatus === 'DRAFT' || currentStatus === 'COMPLETED' || !quiz.status) {
       await this.prisma.quiz.update({
         where: { id: quiz.id },
         data: { status: 'WAITING' },
       });
+      
+      // Emit status change event
+      this.quizGateway.emitQuizStatusChange(quiz.id, 'WAITING');
     }
 
     // Create lobby participant
@@ -361,6 +475,13 @@ export class QuizService {
         quizId: quiz.id,
         participantName,
       },
+    });
+
+    // Emit real-time update to all clients in the quiz room
+    this.quizGateway.emitParticipantJoined(quiz.id, {
+      id: lobbyParticipant.id,
+      participantName: lobbyParticipant.participantName,
+      joinedAt: lobbyParticipant.joinedAt,
     });
 
     return {
@@ -381,9 +502,20 @@ export class QuizService {
   }
 
   async removeLobbyParticipant(lobbyId: string) {
-    await this.prisma.lobbyParticipant.delete({
+    const participant = await this.prisma.lobbyParticipant.findUnique({
       where: { id: lobbyId },
+      select: { quizId: true },
     });
+
+    if (participant) {
+      await this.prisma.lobbyParticipant.delete({
+        where: { id: lobbyId },
+      });
+
+      // Emit real-time updates
+      this.quizGateway.emitParticipantLeft(participant.quizId, lobbyId);
+      this.quizGateway.emitParticipantRemoved(participant.quizId, lobbyId);
+    }
 
     return { message: 'Left the lobby successfully' };
   }
@@ -403,18 +535,35 @@ export class QuizService {
     }
 
     if (quiz.status === 'IN_PROGRESS') {
-      throw new BadRequestException('Quiz has already started');
+      throw new BadRequestException('Quiz is already in progress');
     }
 
-    if (quiz.status === 'COMPLETED') {
-      throw new BadRequestException('Quiz has already been completed');
-    }
+    // Auto-complete any other IN_PROGRESS quiz by this organizer (quiz history tracking)
+    await this.prisma.quiz.updateMany({
+      where: { 
+        organizerId,
+        status: 'IN_PROGRESS',
+        id: { not: quizId }
+      },
+      data: { status: 'COMPLETED' },
+    });
 
+    // Allow starting even if COMPLETED (for reuse)
     // Update quiz status to IN_PROGRESS
     await this.prisma.quiz.update({
       where: { id: quizId },
       data: { status: 'IN_PROGRESS' },
     });
+
+    // Emit real-time event to all participants
+    this.quizGateway.emitQuizStarted(quizId, {
+      quizId,
+      status: 'IN_PROGRESS',
+      startedAt: new Date(),
+    });
+    
+    // Also emit status change for consistency
+    this.quizGateway.emitQuizStatusChange(quizId, 'IN_PROGRESS');
 
     return { message: 'Quiz started successfully', status: 'IN_PROGRESS' };
   }
@@ -643,5 +792,471 @@ export class QuizService {
         status: session.status,
       })),
     };
+  }
+
+  async resetQuiz(quizId: string, organizerId: string) {
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      select: { id: true, organizerId: true, status: true }
+    });
+
+    if (!quiz) {
+      throw new NotFoundException('Quiz not found');
+    }
+
+    if (quiz.organizerId !== organizerId) {
+      throw new ForbiddenException('Only the quiz organizer can reset the quiz');
+    }
+
+    // Mark current quiz as COMPLETED (moves to history) and clear lobby
+    await this.prisma.quiz.update({
+      where: { id: quizId },
+      data: { status: 'COMPLETED' },
+    });
+
+    // Clear lobby participants
+    await this.prisma.lobbyParticipant.deleteMany({
+      where: { quizId },
+    });
+
+    return { 
+      message: 'Quiz session completed and moved to history. You can start a new quiz now.',
+      status: 'COMPLETED'
+    };
+  }
+
+  // Get organizer's active quiz (IN_PROGRESS status)
+  async getActiveQuiz(organizerId: string) {
+    const activeQuiz = await this.prisma.quiz.findFirst({
+      where: { 
+        organizerId,
+        status: 'IN_PROGRESS',
+        isArchived: false
+      },
+      include: {
+        _count: {
+          select: {
+            questions: true,
+            sessions: true,
+            guestSessions: true,
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    return activeQuiz;
+  }
+
+  // Get organizer's recent/completed quizzes
+  async getRecentQuizzes(organizerId: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const [quizzes, total] = await Promise.all([
+      this.prisma.quiz.findMany({
+        where: { 
+          organizerId,
+          status: 'COMPLETED',
+          isArchived: false
+        },
+        include: {
+          _count: {
+            select: {
+              questions: true,
+              sessions: true,
+              guestSessions: true,
+            },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.quiz.count({ 
+        where: { 
+          organizerId,
+          status: 'COMPLETED',
+          isArchived: false
+        }
+      }),
+    ]);
+
+    return {
+      data: quizzes,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  // Get detailed results for a completed quiz
+  async getQuizResults(quizId: string, organizerId: string) {
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      include: {
+        questions: {
+          select: {
+            id: true,
+            question: true,
+            type: true,
+            correctAnswer: true,
+            points: true,
+          },
+        },
+        _count: {
+          select: {
+            sessions: true,
+            guestSessions: true,
+          },
+        },
+      },
+    });
+
+    if (!quiz) {
+      throw new NotFoundException('Quiz not found');
+    }
+
+    if (quiz.organizerId !== organizerId) {
+      throw new ForbiddenException('You can only view results for your own quizzes');
+    }
+
+    // Get all sessions (both authenticated and guest)
+    const [sessions, guestSessions] = await Promise.all([
+      this.prisma.quizSession.findMany({
+        where: { quizId },
+        include: {
+          participant: {
+            select: {
+              id: true,
+              username: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          answers: {
+            include: {
+              question: {
+                select: {
+                  id: true,
+                  question: true,
+                  correctAnswer: true,
+                  points: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { score: 'desc' },
+      }),
+      this.prisma.guestQuizSession.findMany({
+        where: { quizId },
+        include: {
+          answers: {
+            include: {
+              question: {
+                select: {
+                  id: true,
+                  question: true,
+                  correctAnswer: true,
+                  points: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { score: 'desc' },
+      }),
+    ]);
+
+    // Calculate statistics
+    const allSessions = [...sessions, ...guestSessions];
+    const completedSessions = allSessions.filter(s => s.status === 'COMPLETED');
+    const totalParticipants = allSessions.length;
+    const completedCount = completedSessions.length;
+    const averageScore = completedSessions.length > 0
+      ? completedSessions.reduce((sum, s) => sum + s.score, 0) / completedSessions.length
+      : 0;
+    const averagePercentage = completedSessions.length > 0
+      ? completedSessions.reduce((sum, s) => sum + (s.percentage || 0), 0) / completedSessions.length
+      : 0;
+
+    // Format participant results
+    const participants = [
+      ...sessions.map(s => ({
+        id: s.participant.id,
+        name: s.participant.firstName && s.participant.lastName 
+          ? `${s.participant.firstName} ${s.participant.lastName}`
+          : s.participant.username,
+        email: s.participant.email,
+        type: 'authenticated',
+        score: s.score,
+        totalPoints: s.totalPoints,
+        percentage: s.percentage,
+        status: s.status,
+        startedAt: s.startedAt,
+        completedAt: s.completedAt,
+        timeSpent: s.timeSpent,
+        answers: s.answers,
+      })),
+      ...guestSessions.map(s => ({
+        id: s.id,
+        name: s.guestName,
+        email: 'Guest User',
+        type: 'guest',
+        score: s.score,
+        totalPoints: s.totalPoints,
+        percentage: s.percentage,
+        status: s.status,
+        startedAt: s.startedAt,
+        completedAt: s.completedAt,
+        timeSpent: s.timeSpent,
+        answers: s.answers,
+      })),
+    ];
+
+    return {
+      quiz: {
+        id: quiz.id,
+        title: quiz.title,
+        description: quiz.description,
+        code: quiz.code,
+        status: quiz.status,
+        createdAt: quiz.createdAt,
+        updatedAt: quiz.updatedAt,
+      },
+      statistics: {
+        totalParticipants,
+        completedCount,
+        inProgressCount: totalParticipants - completedCount,
+        totalQuestions: quiz.questions.length,
+        averageScore: Math.round(averageScore * 100) / 100,
+        averagePercentage: Math.round(averagePercentage * 100) / 100,
+      },
+      participants: participants.sort((a, b) => b.score - a.score),
+    };
+  }
+
+  // Bulk Operations
+  async bulkOperation(organizerId: string, bulkOperationDto: BulkOperationDto) {
+    const { quizIds, operation } = bulkOperationDto;
+
+    // Verify all quizzes belong to the organizer
+    const quizzes = await this.prisma.quiz.findMany({
+      where: {
+        id: { in: quizIds },
+        organizerId,
+      },
+      select: { id: true },
+    });
+
+    if (quizzes.length !== quizIds.length) {
+      throw new ForbiddenException('Some quizzes do not belong to you or do not exist');
+    }
+
+    let result;
+    switch (operation) {
+      case BulkOperationType.DELETE:
+        result = await this.prisma.quiz.deleteMany({
+          where: { id: { in: quizIds } },
+        });
+        break;
+
+      case BulkOperationType.ARCHIVE:
+        result = await this.prisma.quiz.updateMany({
+          where: { id: { in: quizIds } },
+          data: { isArchived: true, archivedAt: new Date() },
+        });
+        break;
+
+      case BulkOperationType.UNARCHIVE:
+        result = await this.prisma.quiz.updateMany({
+          where: { id: { in: quizIds } },
+          data: { isArchived: false, archivedAt: null },
+        });
+        break;
+
+      case BulkOperationType.ACTIVATE:
+        result = await this.prisma.quiz.updateMany({
+          where: { id: { in: quizIds } },
+          data: { isActive: true },
+        });
+        break;
+
+      case BulkOperationType.DEACTIVATE:
+        result = await this.prisma.quiz.updateMany({
+          where: { id: { in: quizIds } },
+          data: { isActive: false },
+        });
+        break;
+
+      default:
+        throw new BadRequestException('Invalid operation');
+    }
+
+    return {
+      message: `Successfully performed ${operation} on ${result.count} quiz(es)`,
+      count: result.count,
+    };
+  }
+
+  // Export quizzes as JSON backup
+  async exportQuizzes(organizerId: string, exportDto: ExportQuizzesDto) {
+    const where: any = {
+      organizerId,
+    };
+
+    if (exportDto.quizIds && exportDto.quizIds.length > 0) {
+      where.id = { in: exportDto.quizIds };
+    }
+
+    const quizzes = await this.prisma.quiz.findMany({
+      where,
+      include: {
+        questions: {
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    const backup = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      organizerId,
+      quizCount: quizzes.length,
+      quizzes: quizzes.map(quiz => ({
+        ...quiz,
+        // Remove IDs for clean import
+        id: undefined,
+        organizerId: undefined,
+        code: undefined,
+        questions: quiz.questions.map(q => ({
+          ...q,
+          id: undefined,
+          quizId: undefined,
+        })),
+      })),
+    };
+
+    return {
+      filename: `iqnite-backup-${Date.now()}.json`,
+      data: backup,
+    };
+  }
+
+  // Import quizzes from JSON backup
+  async importQuizzes(organizerId: string, backupData: any) {
+    try {
+      const backup = typeof backupData === 'string' ? JSON.parse(backupData) : backupData;
+
+      if (!backup.quizzes || !Array.isArray(backup.quizzes)) {
+        throw new BadRequestException('Invalid backup format');
+      }
+
+      const importedQuizzes: any[] = [];
+
+      for (const quizData of backup.quizzes) {
+        // Generate new unique code
+        let code = this.generateQuizCode();
+        let existingQuiz = await this.prisma.quiz.findUnique({ where: { code } });
+        
+        while (existingQuiz) {
+          code = this.generateQuizCode();
+          existingQuiz = await this.prisma.quiz.findUnique({ where: { code } });
+        }
+
+        const { questions, ...quizFields } = quizData;
+
+        // Create quiz with questions
+        const quiz: any = await this.prisma.quiz.create({
+          data: {
+            ...quizFields,
+            code,
+            organizerId,
+            isArchived: false,
+            archivedAt: null,
+            status: 'DRAFT',
+            scheduledAt: quizFields.scheduledAt ? new Date(quizFields.scheduledAt) : null,
+            expiresAt: quizFields.expiresAt ? new Date(quizFields.expiresAt) : null,
+            questions: {
+              create: questions.map((q: any, index: number) => ({
+                ...q,
+                order: index,
+              })),
+            },
+          },
+          include: {
+            questions: true,
+          },
+        });
+
+        importedQuizzes.push(quiz);
+      }
+
+      return {
+        message: `Successfully imported ${importedQuizzes.length} quiz(es)`,
+        count: importedQuizzes.length,
+        quizzes: importedQuizzes.map(q => ({
+          id: q.id,
+          title: q.title,
+          code: q.code,
+          questionCount: q.questions.length,
+        })),
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to import quizzes: ${error.message}`);
+    }
+  }
+
+  // Archive a single quiz
+  async archiveQuiz(quizId: string, organizerId: string) {
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      select: { id: true, organizerId: true },
+    });
+
+    if (!quiz) {
+      throw new NotFoundException('Quiz not found');
+    }
+
+    if (quiz.organizerId !== organizerId) {
+      throw new ForbiddenException('You can only archive your own quizzes');
+    }
+
+    await this.prisma.quiz.update({
+      where: { id: quizId },
+      data: { isArchived: true, archivedAt: new Date() },
+    });
+
+    return { message: 'Quiz archived successfully' };
+  }
+
+  // Unarchive a single quiz
+  async unarchiveQuiz(quizId: string, organizerId: string) {
+    const quiz = await this.prisma.quiz.findUnique({
+      where: { id: quizId },
+      select: { id: true, organizerId: true },
+    });
+
+    if (!quiz) {
+      throw new NotFoundException('Quiz not found');
+    }
+
+    if (quiz.organizerId !== organizerId) {
+      throw new ForbiddenException('You can only unarchive your own quizzes');
+    }
+
+    await this.prisma.quiz.update({
+      where: { id: quizId },
+      data: { isArchived: false, archivedAt: null },
+    });
+
+    return { message: 'Quiz unarchived successfully' };
   }
 }

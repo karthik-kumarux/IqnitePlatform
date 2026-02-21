@@ -21,6 +21,8 @@ model User {
   isActive      Boolean   @default(true)
   isVerified    Boolean   @default(false)
   verificationToken String?
+  verificationOtp String?
+  verificationOtpExpires DateTime?
   resetPasswordToken String?
   resetPasswordExpires DateTime?
   createdAt     DateTime  @default(now())
@@ -34,7 +36,11 @@ model User {
   quizzes       Quiz[]
   quizSessions  QuizSession[]
   answers       Answer[]
+  auditLogs     AuditLog[]
   
+  @@index([role])
+  @@index([isActive])
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -103,12 +109,18 @@ model Quiz {
   maxAttempts     Int           @default(1)
   showAnswers     Boolean       @default(false) // Show correct answers after completion
   shuffleQuestions Boolean      @default(false)
+  randomizeOptions Boolean      @default(false) // Randomize MCQ options
+  enableAdaptiveDifficulty Boolean @default(false) // Adjust difficulty based on performance
+  questionPoolSize Int?         // Number of questions to randomly select (null = all questions)
+  questionPoolTags String[]     // Tags to filter question pool
   scheduledAt     DateTime?     // Scheduled start time
   expiresAt       DateTime?     // Quiz expiration
   isActive        Boolean       @default(true)
+  isArchived      Boolean       @default(false) // Soft delete / archive
   status          QuizStatus    @default(DRAFT)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+  archivedAt      DateTime?     // When quiz was archived
   
   // Relations
   questions       Question[]
@@ -119,6 +131,9 @@ model Quiz {
   @@map("quizzes")
   @@index([organizerId])
   @@index([code])
+  @@index([isArchived])
+  @@index([status])
+  @@index([createdAt])
 }
 
 enum QuizStatus {
@@ -130,19 +145,24 @@ enum QuizStatus {
 
 // Question Model
 model Question {
-  id              String        @id @default(uuid())
+  id              String            @id @default(uuid())
   quizId          String
-  quiz            Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quiz            Quiz              @relation(fields: [quizId], references: [id], onDelete: Cascade)
   type            QuestionType
-  question        String
-  options         Json?         // For MCQ: ["Option A", "Option B", "Option C", "Option D"]
-  correctAnswer   String        // For MCQ: "A", for True/False: "true"/"false", for short answer: the answer
-  points          Int           @default(1)
-  timeLimit       Int?          // Time limit for this question in seconds
-  order           Int           @default(0)
-  explanation     String?       // Explanation shown after answering
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  question        String            @db.Text // Support rich text/HTML
+  options         Json?             // For MCQ: ["Option A", "Option B", "Option C", "Option D"]
+  correctAnswer   String            // For MCQ: "A", for True/False: "true"/"false", for short answer: the answer
+  points          Int               @default(1)
+  timeLimit       Int?              // Time limit for this question in seconds
+  order           Int               @default(0)
+  explanation     String?           @db.Text // Explanation shown after answering
+  imageUrl        String?           @db.Text // Base64 image data or URL
+  videoUrl        String?           // Embedded video URL (YouTube, Vimeo, etc.)
+  difficulty      QuestionDifficulty @default(MEDIUM) // Easy, Medium, Hard
+  tags            String[]          // Tags for question pools/categories
+  isActive        Boolean           @default(true) // For question pool management
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   
   // Relations
   answers         Answer[]
@@ -150,12 +170,20 @@ model Question {
   
   @@map("questions")
   @@index([quizId])
+  @@index([difficulty])
+  @@index([tags])
 }
 
 enum QuestionType {
   MULTIPLE_CHOICE
   TRUE_FALSE
   SHORT_ANSWER
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
 }
 
 // Quiz Session Model (When a participant joins a quiz)
@@ -179,6 +207,8 @@ model QuizSession {
   @@map("quiz_sessions")
   @@index([quizId])
   @@index([participantId])
+  @@index([status])
+  @@index([startedAt])
   @@unique([quizId, participantId]) // One session per user per quiz (unless multiple attempts)
 }
 
@@ -263,3 +293,22 @@ model GuestAnswer {
   @@unique([sessionId, questionId]) // One answer per question per session
 }
 
+// Audit Log Model (Track admin actions)
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action      String   // e.g., "USER_ROLE_UPDATED", "USER_DELETED", "QUIZ_DELETED"
+  targetType  String?  // e.g., "User", "Quiz"
+  targetId    String?  // ID of the affected entity
+  details     Json?    // Additional context (old value, new value, etc.)
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  
+  @@map("audit_logs")
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([targetType, targetId])
+}

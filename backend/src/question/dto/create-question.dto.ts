@@ -40,4 +40,24 @@ export class CreateQuestionDto {
   @IsString()
   @IsOptional()
   explanation?: string;
+
+  @IsString()
+  @IsOptional()
+  imageUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  videoUrl?: string;
+
+  @IsEnum(['EASY', 'MEDIUM', 'HARD'])
+  @IsOptional()
+  difficulty?: 'EASY' | 'MEDIUM' | 'HARD' = 'MEDIUM';
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  tags?: string[] = [];
+
+  @IsOptional()
+  isActive?: boolean = true;
 }

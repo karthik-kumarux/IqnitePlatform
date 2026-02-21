@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsInt, Min, Max, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsInt, Min, Max, IsDateString, IsArray } from 'class-validator';
 
 export class CreateQuizDto {
   @IsString()
@@ -44,4 +44,22 @@ export class CreateQuizDto {
   @IsDateString()
   @IsOptional()
   expiresAt?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  randomizeOptions?: boolean = false;
+
+  @IsBoolean()
+  @IsOptional()
+  enableAdaptiveDifficulty?: boolean = false;
+
+  @IsInt()
+  @IsOptional()
+  @Min(1)
+  questionPoolSize?: number;
+
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  questionPoolTags?: string[] = [];
 }
